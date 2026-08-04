@@ -29,7 +29,8 @@
             "group": "Как устроена заявка",
             "pages": [
               "status-stage",
-              "amounts"
+              "amounts",
+              "reglament"
             ]
           },
           {
