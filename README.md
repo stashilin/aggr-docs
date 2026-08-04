@@ -17,6 +17,9 @@
 | `reversal.mdx` | возврат и апелляция |
 | `callbacks.mdx` | уведомления об изменениях |
 | `failures.mdx` | ошибка запроса против неуспеха заявки, отмена |
+| `api-reference/authentication.mdx` | подпись HMAC, примеры расчёта, ротация ключей (вкладка API Reference — механика здесь разрешена) |
+| `api-reference/conventions.mdx` | версионирование, трассировка, что сообщать в поддержку |
+| `api-reference/sandbox-reference.mdx` | полная механика мока: `x-mock-response-name`/`-code`, curl, колбэки в песочнице |
 | `api-reference/openapi.yaml` | **сгенерированная копия**, не редактировать |
 
 ## Правила письма

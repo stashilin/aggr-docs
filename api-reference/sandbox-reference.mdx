@@ -1,0 +1,76 @@
+---
+title: "Песочница: полная справка"
+description: "Полная механика мок-сервера: выбор сценария заголовками, curl без Postman, колбэки в песочнице."
+---
+
+Что такое песочница и три способа попробовать — на странице [«Песочница»](/sandbox).
+Здесь — полная механика мока для собственных запросов.
+
+## Свой curl без Postman
+
+Адрес мока: `https://a58fd3b3-5266-4501-beff-14ad901aa5c7.mock.pstmn.io`. Достаточно любого
+непустого `x-api-key`; подпись мок не проверяет (в примерах — заглушка; как считать
+настоящую — [«Аутентификация и подпись»](/api-reference/authentication)).
+
+```sh
+# 1. Создание (redirect)
+curl -s -X POST https://a58fd3b3-5266-4501-beff-14ad901aa5c7.mock.pstmn.io/v1/deposits \
+  -H "content-type: application/json" \
+  -H "x-api-key: demo" \
+  -H "x-signature: demo" \
+  -d '{"order_id":"ORDER-1001","amount":1500.00,"currency":"RUB","method":"sbp","bank":"sber","flow":"redirect","callback_url":"https://merchant.example/payments/callback","success_url":"https://merchant.example/payments/success","pending_url":"https://merchant.example/payments/pending","fail_url":"https://merchant.example/payments/fail"}'
+
+# 2. Статус с исходом — сценарий закреплён за заявкой 9f3c2a71…/ORDER-1001
+curl -s https://a58fd3b3-5266-4501-beff-14ad901aa5c7.mock.pstmn.io/v1/deposits/9f3c2a71-0d6e-4c1b-8a52-3f9e12ab34cd \
+  -H "x-api-key: demo" \
+  -H "x-signature: demo" \
+  -H "x-mock-response-name: Success (SETTLED, redirect)"
+```
+
+В ответе статуса `status: "SUCCESS"`, `stage: "SETTLED"` — зачисляйте именно `paid_amount`.
+
+Путь h2h — те же запросы с заголовками `x-mock-response-name: Deposit created (H2H)` у POST
+и `Pending H2H (payable requisites)` у GET.
+
+## Выбор сценария заголовком запроса
+
+| Заголовок | Значения |
+|---|---|
+| `x-mock-response-name` — статус заявки, только для `GET` | `Pending (issuing)`, `Pending (AWAITING_PAYMENT)`, `Success (SETTLED)` (+ `Success (SETTLED, redirect)` / `Success (SETTLED, h2h)` — те же исходы на заявках сценариев «Оплата»), `Failed (EXPIRED)`, `Reversed (chargeback)`, `Canceled (by merchant)` |
+| `x-mock-response-code` у `POST /v1/deposits` | `400`, `429`, `500`, `502`; для неоднозначных кодов берите имя: `401` — `Invalid signature` / `Unknown api key`, `409` — `Duplicate order_id`, `422` — `Route unavailable` / `Amount out of range` / `Flow not allowed` |
+| `x-mock-response-code` у `GET /v1/deposits/{transaction_id}` | `401`, `404`, `429`, `500` |
+| `x-mock-response-name` — сценарий отмены, у `POST .../cancel` | `Cancel accepted`, `Already finalized`, `Cancel not available`; ошибки кодом `x-mock-response-code`: `401`, `404` |
+| `x-mock-response-name` — вариант интеграции h2h | `Deposit created (H2H)` у `POST`; `Pending H2H (issuing)`, `Pending H2H (payable requisites)`, `Pending H2H (c2c)`, `Pending H2H (nspk)`, `Pending H2H (transgran)` у `GET` |
+
+Разница механизмов повторяет разницу самих явлений: ошибка запроса — это HTTP-код, поэтому
+воспроизводится заголовком `x-mock-response-code`; отрицательный исход заявки — не HTTP-ошибка,
+поэтому выбирается именем сценария `x-mock-response-name` внутри `200`.
+
+Код, которого у ручки нет (например `409` у `GET`), мок вернёт ошибкой
+`mockRequestNotFoundError` — это ограничение песочницы, а не поведение Сервиса.
+
+## Мок — без состояния
+
+Сценарные папки коллекции сгруппированы по вариантам интеграции — разделы «Вариант интеграции
+h2h» и «Вариант интеграции redirectUrl»; папка «Ошибки создания» общая для обоих вариантов.
+Папки «Оплата» проигрывают один жизненный путь заявки от создания до зачисления; сценарии
+исходов (возврат, истечение, отмена) показывают финал на отдельных справочных заявках —
+жмите **Run** на папке, мок-заголовки уже вшиты в запросы. Прогон всей коллекции проверяет
+все пути разом.
+
+Мок — без состояния: «переход» статуса в песочнице — это выбор сценария заголовком, каждый
+путь закреплён за своей заявкой (`transaction_id`).
+
+## Колбэки в песочнице
+
+Мок колбэки не отправляет: он отвечает на входящие запросы, а исходящих не делает — не ждите
+колбэк от песочницы. Чтобы посмотреть колбэк-подобные данные, переключите сценарий GET-запроса
+заголовком `x-mock-response-name` и сверьте `status`/`stage` в ответе — в колбэке придёт та же
+пара полей.
+
+Например, `x-mock-response-name: Reversed (chargeback)` покажет заявку после возврата:
+`status = FAILED`, `stage = REVERSED` и блок `reversal`.
+
+Подпись GET-запроса в коллекции считается от пустой строки — это уже учтено в скрипте.
+Свои ключи подставьте в окружение вместо демонстрационных: `x-api-key` и `secret_key`
+выдаются при подключении, `secret_key` в запросах никогда не передаётся.

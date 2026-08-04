@@ -1,0 +1,112 @@
+---
+title: "Аутентификация и подпись"
+description: "Ключи, HMAC-подпись каждого сообщения, примеры расчёта и ротация без остановки трафика."
+---
+
+При подключении вы получаете `x-api-key` (публичный ключ) и `secret_key` (секрет для HMAC;
+в запросах никогда не передаётся). Токены (Bearer/JWT/OAuth) не используются — каждый запрос
+самодостаточен.
+
+## Подпись сообщения
+
+Подписывается каждое сообщение — и ваши запросы, и колбэки Сервиса:
+
+```
+x-signature = hex( HMAC_SHA256( secret_key, raw_body ) )   — hex в нижнем регистре
+```
+
+- `raw_body` — сырое тело **байт-в-байт**, как оно отправляется: без переформатирования,
+  смены порядка полей и пробелов.
+- Для GET-запросов тело — пустая строка `""`.
+- Любое изменение сырого тела даст другую подпись → `401 INVALID_SIGNATURE`.
+
+## Примеры расчёта подписи
+
+**curl + openssl**
+
+```sh
+# POST — подписывайте и отправляйте одну и ту же переменную
+BODY='{"order_id":"ORDER-1001","amount":1500.00,"currency":"RUB","method":"sbp","flow":"h2h","callback_url":"https://merchant.example/payments/callback"}'
+SIGNATURE=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET_KEY" -hex | sed 's/^.* //')
+
+curl -s -X POST https://api.example/v1/deposits \
+  -H "content-type: application/json" \
+  -H "x-api-key: $API_KEY" \
+  -H "x-signature: $SIGNATURE" \
+  -d "$BODY"
+
+# GET (и POST /cancel — тело пустое) — подпись пустой строки
+SIGNATURE_GET=$(printf '%s' '' | openssl dgst -sha256 -hmac "$SECRET_KEY" -hex | sed 's/^.* //')
+
+curl -s https://api.example/v1/deposits/9f3c2a71-0d6e-4c1b-8a52-3f9e12ab34cd \
+  -H "x-api-key: $API_KEY" \
+  -H "x-signature: $SIGNATURE_GET"
+```
+
+**Node.js**
+
+```js
+import { createHmac } from "node:crypto";
+
+function sign(rawBody, secretKey) {
+  return createHmac("sha256", secretKey).update(rawBody).digest("hex");
+}
+
+// POST — подписывайте ровно ту строку, которую отправите в запросе
+const rawBody = JSON.stringify({
+  order_id: "ORDER-1001",
+  amount: 1500.0,
+  currency: "RUB",
+  method: "sbp",
+  flow: "h2h",
+  callback_url: "https://merchant.example/payments/callback",
+});
+const signature = sign(rawBody, process.env.SECRET_KEY);
+
+// GET — тела нет, подписываем пустую строку
+const signatureForGet = sign("", process.env.SECRET_KEY);
+```
+
+**Python**
+
+```python
+import hmac
+import hashlib
+import json
+
+def sign(raw_body: str, secret_key: str) -> str:
+    return hmac.new(secret_key.encode(), raw_body.encode(), hashlib.sha256).hexdigest()
+
+# POST — подписывайте ровно ту строку, которую отправите в запросе
+raw_body = json.dumps({
+    "order_id": "ORDER-1001",
+    "amount": 1500.00,
+    "currency": "RUB",
+    "method": "sbp",
+    "flow": "h2h",
+    "callback_url": "https://merchant.example/payments/callback",
+})
+signature = sign(raw_body, secret_key)
+
+# GET — тела нет, подписываем пустую строку
+signature_for_get = sign("", secret_key)
+```
+
+## Частые ошибки
+
+- **Подписывайте байты, не объект.** Если собрать тело в объект, подписать его, а затем
+  сериализовать отдельно для отправки — порядок ключей или пробелы разойдутся с реально
+  отправленными байтами, и подпись не совпадёт → `401 INVALID_SIGNATURE`.
+- **Для GET подписывайте именно пустую строку `""`,** а не пропускайте заголовок
+  `x-signature` — его отсутствие не заменяет подпись пустого тела.
+
+## Ротация ключей
+
+Не реже раза в 90 дней, без остановки трафика через окно двух ключей: в переходном окне
+Сервис принимает подпись и старым, и новым ключом; колбэки подписываются ключом, чей
+`x-api-key` указан в заголовке колбэка. По окончании окна старый ключ → `401 UNKNOWN_API_KEY`.
+
+<Note>
+В песочнице подпись не проверяется — она понадобится только на боевом окружении.
+Как устроена песочница — [«Песочница: полная справка»](/api-reference/sandbox-reference).
+</Note>

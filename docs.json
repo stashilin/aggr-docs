@@ -50,7 +50,20 @@
       },
       {
         "tab": "API Reference",
-        "openapi": "api-reference/openapi.yaml"
+        "groups": [
+          {
+            "group": "Протокол",
+            "pages": [
+              "api-reference/authentication",
+              "api-reference/conventions",
+              "api-reference/sandbox-reference"
+            ]
+          },
+          {
+            "group": "Операции",
+            "openapi": "api-reference/openapi.yaml"
+          }
+        ]
       }
     ]
   },
