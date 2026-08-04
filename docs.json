@@ -1,0 +1,52 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Агрегатор — приём депозитов",
+  "colors": {
+    "primary": "#2558D0",
+    "light": "#4C85E6",
+    "dark": "#2558D0"
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Документация",
+        "groups": [
+          {
+            "group": "Начало",
+            "pages": [
+              "index"
+            ]
+          },
+          {
+            "group": "Как устроена заявка",
+            "pages": [
+              "status-stage",
+              "amounts"
+            ]
+          },
+          {
+            "group": "Что происходит дальше",
+            "pages": [
+              "reversal",
+              "callbacks",
+              "failures"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "openapi": "api-reference/openapi.yaml"
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Песочница",
+        "href": "https://documenter.getpostman.com/view/56707679/2sBY4PPLTt"
+      }
+    ]
+  }
+}
