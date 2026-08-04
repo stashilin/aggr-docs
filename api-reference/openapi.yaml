@@ -423,7 +423,7 @@ info:
 
     мок (песочница): `Canceled (by merchant)`
 
-    Заявка финальна — статус больше не изменится. Пришёл `SUCCESS / SETTLED` вместо отмены — клиент успел оплатить → «Развилки».
+    Заявка финальна; `error.message` можно показать клиенту. Колбэки слушайте дальше: для `FAILED` возможна апелляция — заявка может стать `SUCCESS / SETTLED`. Пришёл `SUCCESS / SETTLED` вместо отмены — клиент успел оплатить → «Развилки».
 
     **Развилки: условие → ответ**
 
@@ -1201,7 +1201,7 @@ info:
     - коллекция со скриптами подписи, тестами и сценарными папками — форк: https://god.gw.postman.com/run-collection/56707679-4659f419-e950-42d3-8933-ddc79316c3d7
 
     Мок реальных денег не двигает и подпись не проверяет; сценарии выбираются заголовками
-    запроса — подробности в описании коллекции, раздел «Песочница: полная справка».
+    запроса — полная справка: https://swbw.mintlify.app/api-reference/sandbox-reference
 servers:
   - url: "https://{host}"
     description: Хост API сообщается при подключении
@@ -1428,7 +1428,7 @@ paths:
         | `pay_amount` | number | если отличается от `amount` | сумма к оплате — клиент должен оплатить именно её |
         | `redirect_url` | string (uri) | redirect: когда форма готова | форма для оплаты — направьте на неё клиента |
         | `paid_amount` | number | как только платёж получен | фактически оплаченная сумма — зачисляйте её |
-        | `requisites` | object | после выдачи реквизитов | redirect — справочная маскированная копия; h2h — платёжные, полные |
+        | `requisites` | object | после выдачи реквизитов, пока заявка ждёт оплату; в исходе сохраняются только при истечении (`EXPIRED`) | redirect — справочная маскированная копия; h2h — платёжные, полные |
         | `reversal` | object | после возврата | `occurred_at`, `amount` (= `paid_amount`), `reason`; остаётся навсегда |
         | `error` | object | при `status = FAILED` | только `message` — человекочитаемое пояснение, разбору не подлежит |
         | `account_number`, `destination_account_number` | string | если применимо | маскированные реквизиты плательщика/получателя |
@@ -1539,6 +1539,7 @@ paths:
                     bank: "tbank"
                     psp: "psp-slug"
                     amount: 1500.00
+                    pay_amount: 1500.37
                     paid_amount: 1500.37
                     currency: "RUB"
                     reversal:
@@ -1547,6 +1548,31 @@ paths:
                       reason: "DISPUTE_LOST"
                     created_at: "2026-07-17T14:35:45Z"
                     updated_at: "2026-07-31T09:12:00Z"
+                    paid_at: "2026-07-17T14:40:58Z"
+                appealed:
+                  summary: Успех после апелляции — блок `reversal` остался
+                  description: |
+                    Возврат был, затем апелляция выиграна: исход снова `SUCCESS / SETTLED`,
+                    а блок `reversal` остался — он часть истории заявки. Признак действующего
+                    возврата — не присутствие блока, а текущий `FAILED / REVERSED`.
+                  value:
+                    order_id: "ORDER-1001"
+                    transaction_id: "9f3c2a71-0d6e-4c1b-8a52-3f9e12ab34cd"
+                    status: "SUCCESS"
+                    stage: "SETTLED"
+                    method: "sbp"
+                    bank: "tbank"
+                    psp: "psp-slug"
+                    amount: 1500.00
+                    pay_amount: 1500.37
+                    paid_amount: 1500.37
+                    currency: "RUB"
+                    reversal:
+                      occurred_at: "2026-07-31T09:12:00Z"
+                      amount: 1500.37
+                      reason: "DISPUTE_LOST"
+                    created_at: "2026-07-17T14:35:45Z"
+                    updated_at: "2026-08-02T10:05:00Z"
                     paid_at: "2026-07-17T14:40:58Z"
         "401":
           $ref: "#/components/responses/Unauthorized"
@@ -1652,7 +1678,8 @@ components:
       name: x-signature
       description: |
         HMAC-SHA256 от сырого тела запроса (`hex`, нижний регистр), секрет — `secret_key`.
-        Для GET — от пустой строки `""`. См. раздел «Аутентификация и подпись».
+        Для GET — от пустой строки `""`. Механика и примеры:
+        https://swbw.mintlify.app/api-reference/authentication («Аутентификация и подпись»).
   responses:
     Unauthorized:
       description: "`INVALID_SIGNATURE` — подпись невалидна; `UNKNOWN_API_KEY` — ключ не найден или отозван."
