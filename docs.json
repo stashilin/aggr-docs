@@ -19,6 +19,13 @@
             ]
           },
           {
+            "group": "Путь заявки",
+            "pages": [
+              "scenarios-payment",
+              "scenarios-exceptions"
+            ]
+          },
+          {
             "group": "Как устроена заявка",
             "pages": [
               "status-stage",
@@ -31,6 +38,12 @@
               "reversal",
               "callbacks",
               "failures"
+            ]
+          },
+          {
+            "group": "Попробовать",
+            "pages": [
+              "sandbox"
             ]
           }
         ]
@@ -45,7 +58,7 @@
     "links": [
       {
         "label": "Песочница",
-        "href": "https://documenter.getpostman.com/view/56707679/2sBY4PPLTt"
+        "href": "https://swbw.mintlify.app/sandbox"
       }
     ]
   }
