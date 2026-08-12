@@ -1,7 +1,7 @@
 # СГЕНЕРИРОВАННАЯ КОПИЯ — НЕ РЕДАКТИРОВАТЬ.
-# Источник правды: contract/openapi.yaml в корне репозитория.
-# Копия нужна потому, что Mintlify читает спеку только внутри каталога доков.
-# Обновление: cp contract/openapi.yaml docs-site/api-reference/openapi.yaml
+# Источник правды: contract/openapi.yaml в приватной репе aggr-contract.
+# Копия нужна потому, что Mintlify читает спеку только внутри репы доков.
+# Обновление: ./scripts/sync-spec.sh (проверка расхождения: --check)
 openapi: 3.1.0
 info:
   title: Агрегатор — приём депозитов

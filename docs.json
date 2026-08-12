@@ -53,21 +53,62 @@
         "tab": "API Reference",
         "groups": [
           {
-            "group": "Протокол",
+            "group": "Начало",
             "pages": [
-              "api-reference/authentication",
-              "api-reference/conventions",
-              "api-reference/sandbox-reference"
+              "api-reference/index"
             ]
           },
           {
             "group": "Операции",
-            "openapi": "api-reference/openapi.yaml"
+            "expanded": true,
+            "pages": [
+              "api-reference/operations/create-deposit",
+              "api-reference/operations/status",
+              "api-reference/operations/cancel"
+            ]
+          },
+          {
+            "group": "Протокол",
+            "pages": [
+              "api-reference/authentication",
+              "api-reference/conventions"
+            ]
+          },
+          {
+            "group": "Песочница",
+            "pages": [
+              "api-reference/sandbox-reference"
+            ]
           }
         ]
       }
     ]
   },
+  "api": {
+    "params": {
+      "expanded": "all"
+    },
+    "playground": {
+      "display": "simple"
+    }
+  },
+  "redirects": [
+    {
+      "source": "/api-reference/депозиты/создать-депозит",
+      "destination": "/api-reference/operations/create-deposit",
+      "permanent": true
+    },
+    {
+      "source": "/api-reference/депозиты/статус-депозита",
+      "destination": "/api-reference/operations/status",
+      "permanent": true
+    },
+    {
+      "source": "/api-reference/депозиты/отменить-депозит",
+      "destination": "/api-reference/operations/cancel",
+      "permanent": true
+    }
+  ],
   "navbar": {
     "links": [
       {
