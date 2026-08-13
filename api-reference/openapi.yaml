@@ -45,7 +45,7 @@ info:
        │◄──────────────────────┤                        │                      │
     ```
 
-    1. Создайте депозит `POST /v1/deposits`, указав вариант интеграции (`flow`), метод оплаты (`method`) и при необходимости банк (`bank`).
+    1. Создайте депозит `POST /v1/deposits`, указав вариант интеграции (`flow`), метод оплаты (`method`: `sbp` | `nspk` | `transgran` | `c2c`) и при необходимости банк (`bank`).
        Через какую платёжную систему пойдёт платёж — по умолчанию решает Сервис; при закреплённом за вами маршруте укажите её полем `psp`.
     2. Заберите артефакт вашего варианта из `GET /v1/deposits/{transaction_id}`: реквизиты (`requisites` + `pay_amount`, h2h) покажите клиенту, на форму для оплаты (`redirect_url`, redirect) — направьте его.
        Пока артефакта нет (`stage = ISSUING_REQUISITES`) — покажите клиенту ожидание и опрашивайте статус.
@@ -99,8 +99,8 @@ info:
       не выданы — покажите клиенту ожидание и опрашивайте статус.
     - Клиент переводит сумму `pay_amount` (если поля нет — `amount`) строго по выданным
       реквизитам до `expires_at`.
-    - Если в `requisites` есть `instruction` или `payer_bank_required` — покажите их клиенту
-      явным текстом целиком: без этого перевод может не дойти.
+    - Если в `requisites` есть `instruction` — покажите её клиенту явным текстом целиком:
+      без этого перевод может не дойти.
 
     Как проходит платёж в redirect:
 
@@ -150,7 +150,7 @@ info:
 
     **Шаг 1 · Создать депозит (h2h) · `PENDING / ISSUING_REQUISITES`**
 
-    `POST /v1/deposits` — в теле `"flow": "h2h"`, `method`, `amount`, `order_id`
+    `POST /v1/deposits` — обязательные в теле: `"flow": "h2h"`, `method` (метод оплаты: `sbp` | `nspk` | `transgran` | `c2c`), `amount`, `currency`, `order_id`, `callback_url`; необязательные: `bank` (банк, выбранный клиентом, — в нём при наличии выдадут реквизиты), `psp`, `customer_account_id`, `fields`. Разбор каждого поля — таблица «Поля запроса» в `POST /v1/deposits` ниже.
 
     ```
     200 OK
@@ -208,7 +208,7 @@ info:
 
     мок (песочница): `Pending H2H (payable requisites)`
 
-    Покажите клиенту реквизиты целиком, сумму `pay_amount` (не `amount`!) и срок `expires_at`; `instruction` и `payer_bank_required`, если пришли, — тоже целиком. Клиент переводит деньги — ждите колбэк на `callback_url` → шаг 4.
+    Покажите клиенту реквизиты целиком, сумму `pay_amount` (не `amount`!) и срок `expires_at`; `instruction`, если пришла, — тоже целиком. Клиент переводит деньги — ждите колбэк на `callback_url` → шаг 4.
 
     ↓ клиент переводит `pay_amount` по реквизитам до `expires_at` — Сервис присылает колбэк (в песочнице колбэков нет — шаг 4 выполняйте сразу)
 
@@ -499,11 +499,11 @@ info:
     | Метод | Поля | Особенность |
     |---|---|---|
     | `sbp` | `phone`, `bank`, `bank_name`, `recipient_name` | перевод по телефону; `bank` — информационный |
-    | `c2c` | `card_number`, `bank`, `bank_name`, `recipient_name` | при `payer_bank_required` — перевод строго из указанного банка, покажите клиенту явно |
+    | `c2c` | `card_number`, `bank`, `bank_name`, `recipient_name` | перевод по номеру карты |
     | `nspk` | `payment_url`, `qr_data`, `qr_image_url` | QR рендерите сами из `qr_data` или берите готовую картинку `qr_image_url` |
     | `transgran` | `card_number` или `phone`, `bank_name`, `payment_currency`, `instruction` | `instruction` присутствует всегда — покажите клиенту целиком |
 
-    В фенсах ниже — только `method` и `requisites`; поля `instruction` и `payer_bank_required` показывайте клиенту явным текстом целиком.
+    В фенсах ниже — только `method` и `requisites`; поле `instruction` показывайте клиенту явным текстом целиком.
 
     **`sbp` · СБП — перевод по номеру телефона**
 
@@ -531,11 +531,9 @@ info:
       "requisites": {
         "card_number": "2200 1234 5678 9012",
                                      ← куда переводить
-        "bank": "sber",
-        "bank_name": "Сбербанк",
-        "recipient_name": "Пётр С.",
-        "payer_bank_required": "tbank"
-                                     ← строго из этого банка
+        "bank": "tbank",
+        "bank_name": "Т-Банк",
+        "recipient_name": "Пётр С."
       }
     }
     ```
@@ -595,7 +593,7 @@ info:
 
     **Шаг 1 · Создать депозит (redirect) · `PENDING / ISSUING_REQUISITES`**
 
-    `POST /v1/deposits` — в теле `"flow": "redirect"`, `method`, `amount`, `order_id`, `success_url` / `pending_url` / `fail_url`
+    `POST /v1/deposits` — обязательные в теле: `"flow": "redirect"`, `method` (метод оплаты: `sbp` | `nspk` | `transgran` | `c2c`), `amount`, `currency`, `order_id`, `callback_url`, `success_url`, `pending_url`, `fail_url`; необязательные: `bank` (банк, выбранный клиентом, — в нём при наличии выдадут реквизиты), `psp`, `customer_account_id`, `fields`. Разбор каждого поля — таблица «Поля запроса» в `POST /v1/deposits` ниже.
 
     ```
     200 OK
@@ -934,7 +932,7 @@ info:
 
     ```sh
     # POST — подписывайте и отправляйте одну и ту же переменную
-    BODY='{"order_id":"ORDER-1001","amount":1500.00,"currency":"RUB","method":"sbp","flow":"h2h","callback_url":"https://merchant.example/payments/callback"}'
+    BODY='{"order_id":"ORDER-1001","amount":1500.00,"currency":"RUB","method":"sbp","flow":"h2h","bank":"tbank","callback_url":"https://merchant.example/payments/callback"}'
     SIGNATURE=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET_KEY" -hex | sed 's/^.* //')
 
     curl -s -X POST https://api.example/v1/deposits \
@@ -967,6 +965,7 @@ info:
       currency: "RUB",
       method: "sbp",
       flow: "h2h",
+      bank: "tbank",
       callback_url: "https://merchant.example/payments/callback",
     });
     const signature = sign(rawBody, process.env.SECRET_KEY);
@@ -992,6 +991,7 @@ info:
         "currency": "RUB",
         "method": "sbp",
         "flow": "h2h",
+        "bank": "tbank",
         "callback_url": "https://merchant.example/payments/callback",
     })
     signature = sign(raw_body, secret_key)
@@ -1248,15 +1248,14 @@ paths:
         | `order_id` | string | **да** | ID транзакции в вашей системе; ключ идемпотентности, уникален бессрочно |
         | `amount` | number | **да** | сумма, строго больше нуля, не более 2 знаков после запятой |
         | `currency` | string | **да** | ISO 4217; сейчас только `RUB` |
-        | `method` | string | **да** | `sbp` \| `nspk` \| `transgran` \| `c2c` |
+        | `method` | string | **да** | метод оплаты: `sbp` — СБП, по номеру телефона \| `nspk` — НСПК, по QR-коду / платёжной ссылке \| `transgran` — трансграничный перевод \| `c2c` — по номеру карты |
         | `flow` | string | **да** | вариант интеграции: `redirect` \| `h2h` |
         | `callback_url` | string (uri) | **да** | HTTPS-приёмник колбэков; публичный адрес, порт 443 |
         | `success_url` | string (uri) | да (redirect) / — (h2h) | возврат клиента при успешной оплате |
         | `pending_url` | string (uri) | да (redirect) / — (h2h) | возврат клиента, пока оплата не подтверждена |
         | `fail_url` | string (uri) | да (redirect) / — (h2h) | возврат клиента при неуспехе |
         | `psp` | string | нет | slug платёжной системы при закреплённом за вами маршруте; без него маршрут выбирает Сервис. Неверный slug — `422 PSP_NOT_FOUND` / `PSP_DISABLED`. Кто фактически выдал реквизиты — поле `psp` в GET-статусе, оно появляется после выдачи |
-        | `bank` | string | нет | банк получателя (`sber`, `tbank`, `alfa`, …); не передан — банк выбирает Сервис |
-        | `payer_bank` | string | нет | банк плательщика; рекомендуется для `transgran` |
+        | `bank` | string | нет | банк клиента — тот, который клиент выбрал у вас при оплате (`sber`, `tbank`, `alfa`, …): Сервис выдаст реквизиты в этом банке при наличии; не передан — банк выбирает Сервис |
         | `customer_account_id` | integer | нет | числовой ID клиента в вашей системе |
         | `fields` | object | нет | данные плательщика: `first_name`, `last_name`, `middle_name`, `email`, `phone` — все необязательны |
       requestBody:
@@ -1420,7 +1419,7 @@ paths:
         | `order_id`, `transaction_id` | string | всегда | ваш ID и ID депозита в Сервисе |
         | `status` | string | всегда | исход: `PENDING` \| `SUCCESS` \| `FAILED` — единственное поле для денежной логики |
         | `stage` | string | всегда | этап жизненного цикла (`-ING` идёт, `-ED` кончился); словарь пополняется без смены версии |
-        | `method` | string | всегда | платёжный метод |
+        | `method` | string | всегда | платёжный метод: `sbp` \| `nspk` \| `transgran` \| `c2c` |
         | `amount` | number | всегда | заявленная вами сумма |
         | `currency` | string | всегда | `RUB` |
         | `bank` | string | если применимо | код банка выданного реквизита |
@@ -1734,7 +1733,7 @@ components:
     BankCode:
       type: string
       description: "Код (slug) банка из справочника: `sber` — Сбербанк, `tbank` — Т-Банк, `alfa` — Альфа-Банк. Актуальный перечень сообщается при подключении."
-      example: sber
+      example: tbank
     DepositCreateRequest:
       type: object
       required: [order_id, amount, currency, method, flow, callback_url]
@@ -1786,10 +1785,11 @@ components:
           example: "psp-slug"
         bank:
           allOf: [{ $ref: "#/components/schemas/BankCode" }]
-          description: Банк получателя — банк, реквизиты которого нужны клиенту. Если не передан — банк выбирает Сервис.
-        payer_bank:
-          allOf: [{ $ref: "#/components/schemas/BankCode" }]
-          description: Банк плательщика. Рекомендуется передавать для `transgran`.
+          description: |
+            Банк клиента — тот, который клиент выбрал у вас при оплате.
+            При наличии Сервис выдаст реквизиты в этом банке — клиент
+            переводит деньги внутри своего банка. Если не передан —
+            банк выбирает Сервис.
         customer_account_id:
           type: integer
           description: Числовой ID клиента в вашей системе.
@@ -1985,7 +1985,7 @@ components:
         | Метод | Поля | Особенность |
         |---|---|---|
         | `sbp` | `phone`, `bank`, `bank_name`, `recipient_name` | перевод по телефону; `bank` — информационный |
-        | `c2c` | `card_number`, `bank`, `bank_name`, `recipient_name` | при `payer_bank_required` — перевод строго из указанного банка, покажите клиенту явно |
+        | `c2c` | `card_number`, `bank`, `bank_name`, `recipient_name` | перевод по номеру карты |
         | `nspk` | `payment_url`, `qr_data`, `qr_image_url` | QR рендерите сами из `qr_data` или берите готовую картинку `qr_image_url` |
         | `transgran` | `card_number` или `phone`, `bank_name`, `payment_currency`, `instruction` | `instruction` присутствует всегда — покажите клиенту целиком |
       properties:
@@ -1999,7 +1999,6 @@ components:
         payment_currency: { type: string, description: "Валюта оплаты по реквизиту (`transgran`)" }
         instruction: { type: string, description: "Текстовая инструкция для клиента (`transgran`). В h2h для `transgran` присутствует всегда — показывайте целиком." }
         qr_image_url: { type: string, format: uri, description: "Готовая картинка QR-кода (`nspk`), если рендер на вашей стороне не нужен" }
-        payer_bank_required: { type: string, description: "Перевод строго из банка с этим кодом (`c2c`) — покажите клиенту явным текстом", example: "tbank" }
     CallbackEvent:
       type: object
       description: |
