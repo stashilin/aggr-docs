@@ -45,7 +45,7 @@ info:
        │◄──────────────────────┤                        │                      │
     ```
 
-    1. Создайте депозит `POST /v1/deposits`, указав вариант интеграции (`flow`), метод оплаты (`method`: `sbp` | `nspk` | `transgran` | `c2c`) и при необходимости банк (`bank`).
+    1. Создайте депозит `POST /v1/deposits`, указав вариант интеграции (`flow`), платёжный метод (`method`: `sbp` | `nspk` | `transgran` | `c2c`) и при необходимости банк (`bank`).
        Через какую платёжную систему пойдёт платёж — по умолчанию решает Сервис; при закреплённом за вами маршруте укажите её полем `psp`.
     2. Заберите артефакт вашего варианта из `GET /v1/deposits/{transaction_id}`: реквизиты (`requisites` + `pay_amount`, h2h) покажите клиенту, на форму для оплаты (`redirect_url`, redirect) — направьте его.
        Пока артефакта нет (`stage = ISSUING_REQUISITES`) — покажите клиенту ожидание и опрашивайте статус.
@@ -150,7 +150,7 @@ info:
 
     **Шаг 1 · Создать депозит (h2h) · `PENDING / ISSUING_REQUISITES`**
 
-    `POST /v1/deposits` — обязательные в теле: `"flow": "h2h"`, `method` (метод оплаты: `sbp` | `nspk` | `transgran` | `c2c`), `amount`, `currency`, `order_id`, `callback_url`; необязательные: `bank` (банк, выбранный клиентом, — в нём при наличии выдадут реквизиты), `psp`, `customer_account_id`, `fields`. Разбор каждого поля — таблица «Поля запроса» в `POST /v1/deposits` ниже.
+    `POST /v1/deposits` — обязательные в теле: `"flow": "h2h"`, `method` (платёжный метод: `sbp` | `nspk` | `transgran` | `c2c`), `amount`, `currency`, `order_id`, `callback_url`; необязательные: `bank` (банк, выбранный клиентом, — в нём при наличии выдадут реквизиты), `psp`, `customer_account_id`, `fields`. Разбор каждого поля — таблица «Поля запроса» в `POST /v1/deposits` ниже.
 
     ```
     200 OK
@@ -593,7 +593,7 @@ info:
 
     **Шаг 1 · Создать депозит (redirect) · `PENDING / ISSUING_REQUISITES`**
 
-    `POST /v1/deposits` — обязательные в теле: `"flow": "redirect"`, `method` (метод оплаты: `sbp` | `nspk` | `transgran` | `c2c`), `amount`, `currency`, `order_id`, `callback_url`, `success_url`, `pending_url`, `fail_url`; необязательные: `bank` (банк, выбранный клиентом, — в нём при наличии выдадут реквизиты), `psp`, `customer_account_id`, `fields`. Разбор каждого поля — таблица «Поля запроса» в `POST /v1/deposits` ниже.
+    `POST /v1/deposits` — обязательные в теле: `"flow": "redirect"`, `method` (платёжный метод: `sbp` | `nspk` | `transgran` | `c2c`), `amount`, `currency`, `order_id`, `callback_url`, `success_url`, `pending_url`, `fail_url`; необязательные: `bank` (банк, выбранный клиентом, — в нём при наличии выдадут реквизиты), `psp`, `customer_account_id`, `fields`. Разбор каждого поля — таблица «Поля запроса» в `POST /v1/deposits` ниже.
 
     ```
     200 OK
@@ -1248,7 +1248,7 @@ paths:
         | `order_id` | string | **да** | ID транзакции в вашей системе; ключ идемпотентности, уникален бессрочно |
         | `amount` | number | **да** | сумма, строго больше нуля, не более 2 знаков после запятой |
         | `currency` | string | **да** | ISO 4217; сейчас только `RUB` |
-        | `method` | string | **да** | метод оплаты: `sbp` — СБП, по номеру телефона \| `nspk` — НСПК, по QR-коду / платёжной ссылке \| `transgran` — трансграничный перевод \| `c2c` — по номеру карты |
+        | `method` | string | **да** | платёжный метод: `sbp` — СБП, по номеру телефона \| `nspk` — НСПК, по QR-коду / платёжной ссылке \| `transgran` — трансграничный перевод \| `c2c` — по номеру карты |
         | `flow` | string | **да** | вариант интеграции: `redirect` \| `h2h` |
         | `callback_url` | string (uri) | **да** | HTTPS-приёмник колбэков; публичный адрес, порт 443 |
         | `success_url` | string (uri) | да (redirect) / — (h2h) | возврат клиента при успешной оплате |
