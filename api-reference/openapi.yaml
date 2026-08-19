@@ -45,7 +45,7 @@ info:
        │◄──────────────────────┤                        │                      │
     ```
 
-    1. Создайте депозит `POST /v1/deposits`, указав вариант интеграции (`flow`), платёжный метод (`method`: `sbp` | `nspk` | `transgran` | `c2c`) и при необходимости банк (`bank`).
+    1. Создайте депозит `POST /v1/deposits`, указав вариант интеграции (`flow`), платёжный метод (`method`: `sbp` | `c2c` | `nspk` | `sber_qr` | `vtb_qr` | `transgran` | `sim_transgran` | `sim`) и при необходимости банк (`bank`).
        Через какую платёжную систему пойдёт платёж — по умолчанию решает Сервис; при закреплённом за вами маршруте укажите её полем `psp`.
     2. Заберите артефакт вашего варианта из `GET /v1/deposits/{transaction_id}`: реквизиты (`requisites` + `pay_amount`, h2h) покажите клиенту, на форму для оплаты (`redirect_url`, redirect) — направьте его.
        Пока артефакта нет (`stage = ISSUING_REQUISITES`) — покажите клиенту ожидание и опрашивайте статус.
@@ -150,7 +150,7 @@ info:
 
     **Шаг 1 · Создать депозит (h2h) · `PENDING / ISSUING_REQUISITES`**
 
-    `POST /v1/deposits` — обязательные в теле: `"flow": "h2h"`, `method` (платёжный метод: `sbp` | `nspk` | `transgran` | `c2c`), `amount`, `currency`, `order_id`, `callback_url`; необязательные: `bank` (банк, выбранный клиентом, — в нём при наличии выдадут реквизиты), `psp`, `customer_account_id`, `fields`. Разбор каждого поля — таблица «Поля запроса» в `POST /v1/deposits` ниже.
+    `POST /v1/deposits` — обязательные в теле: `"flow": "h2h"`, `method` (платёжный метод: `sbp` | `c2c` | `nspk` | `sber_qr` | `vtb_qr` | `transgran` | `sim_transgran` | `sim`), `amount`, `currency`, `order_id`, `callback_url`; необязательные: `bank` (банк, выбранный клиентом, — в нём при наличии выдадут реквизиты), `psp`, `customer_account_id`, `fields`. Разбор каждого поля — таблица «Поля запроса» в `POST /v1/deposits` ниже.
 
     ```
     200 OK
@@ -490,7 +490,7 @@ info:
 
     ### Сценарий: Реквизиты по методам
 
-    Реквизиты возвращает платёжная система — состав зависит от `method`. Все четыре ответа ниже — на один и тот же вызов, заявка в `PENDING / AWAITING_PAYMENT`:
+    Реквизиты возвращает платёжная система — состав зависит от `method`. Таблица описывает все восемь методов. Примеры ниже показывают четыре базовых формы ответа; `sber_qr` и `vtb_qr` повторяют форму `nspk`, `sim_transgran` — форму `transgran` с мобильным номером вместо банковской карты, а `sim` использует мобильный номер и при необходимости инструкцию.
 
     `GET /v1/deposits/{transaction_id}`
 
@@ -501,7 +501,11 @@ info:
     | `sbp` | `phone`, `bank`, `bank_name`, `recipient_name` | перевод по телефону; `bank` — информационный |
     | `c2c` | `card_number`, `bank`, `bank_name`, `recipient_name` | перевод по номеру карты |
     | `nspk` | `payment_url`, `qr_data`, `qr_image_url` | QR рендерите сами из `qr_data` или берите готовую картинку `qr_image_url` |
+    | `sber_qr` | `payment_url`, `qr_data`, `qr_image_url` | QR Сбербанка; формат реквизитов как у `nspk` |
+    | `vtb_qr` | `payment_url`, `qr_data`, `qr_image_url` | QR ВТБ; формат реквизитов как у `nspk` |
     | `transgran` | `card_number` или `phone`, `bank_name`, `payment_currency`, `instruction` | `instruction` присутствует всегда — покажите клиенту целиком |
+    | `sim_transgran` | `phone`, `bank_name`, `payment_currency`, `instruction` | трансграничный перевод на SIM-карту или мобильный номер; валюта и инструкция как у `transgran` |
+    | `sim` | `phone`, `instruction` | оплата с баланса SIM-карты или мобильного номера |
 
     В фенсах ниже — только `method` и `requisites`; поле `instruction` показывайте клиенту явным текстом целиком.
 
@@ -593,7 +597,7 @@ info:
 
     **Шаг 1 · Создать депозит (redirect) · `PENDING / ISSUING_REQUISITES`**
 
-    `POST /v1/deposits` — обязательные в теле: `"flow": "redirect"`, `method` (платёжный метод: `sbp` | `nspk` | `transgran` | `c2c`), `amount`, `currency`, `order_id`, `callback_url`, `success_url`, `pending_url`, `fail_url`; необязательные: `bank` (банк, выбранный клиентом, — в нём при наличии выдадут реквизиты), `psp`, `customer_account_id`, `fields`. Разбор каждого поля — таблица «Поля запроса» в `POST /v1/deposits` ниже.
+    `POST /v1/deposits` — обязательные в теле: `"flow": "redirect"`, `method` (платёжный метод: `sbp` | `c2c` | `nspk` | `sber_qr` | `vtb_qr` | `transgran` | `sim_transgran` | `sim`), `amount`, `currency`, `order_id`, `callback_url`, `success_url`, `pending_url`, `fail_url`; необязательные: `bank` (банк, выбранный клиентом, — в нём при наличии выдадут реквизиты), `psp`, `customer_account_id`, `fields`. Разбор каждого поля — таблица «Поля запроса» в `POST /v1/deposits` ниже.
 
     ```
     200 OK
@@ -1256,7 +1260,7 @@ paths:
         | `order_id` | string | **да** | ID транзакции в вашей системе; ключ идемпотентности, уникален бессрочно |
         | `amount` | number | **да** | сумма, строго больше нуля, не более 2 знаков после запятой |
         | `currency` | string | **да** | ISO 4217; сейчас только `RUB` |
-        | `method` | string | **да** | платёжный метод: `sbp` — СБП, по номеру телефона \| `nspk` — НСПК, по QR-коду / платёжной ссылке \| `transgran` — трансграничный перевод \| `c2c` — по номеру карты |
+        | `method` | string | **да** | платёжный метод из справочника ниже: `sbp` \| `c2c` \| `nspk` \| `sber_qr` \| `vtb_qr` \| `transgran` \| `sim_transgran` \| `sim` |
         | `flow` | string | **да** | вариант интеграции: `redirect` \| `h2h` |
         | `callback_url` | string (uri) | **да** | HTTPS-приёмник колбэков; публичный адрес, порт 443 |
         | `success_url` | string (uri) | да (redirect) / — (h2h) | возврат клиента при успешной оплате |
@@ -1269,18 +1273,23 @@ paths:
 
         ### Справочники `method` и `bank`
 
-        Платёжный метод определяет механику перевода. Банк в название метода не входит:
-        если он известен, передавайте его отдельно в поле `bank`.
+        Платёжный метод определяет механику перевода. Обычно банк передаётся отдельно
+        в поле `bank`; `sber_qr` и `vtb_qr` — утверждённые исключения, потому что
+        соответствующий банк определяет сам QR-контур.
 
         | Код | Название | Что делает клиент |
         |---|---|---|
         | `sbp` | СБП | Переводит по номеру телефона через Систему быстрых платежей |
         | `c2c` | Перевод на карту | Переводит по номеру банковской карты |
         | `nspk` | QR НСПК | Оплачивает по QR-коду или платёжной ссылке НСПК |
+        | `sber_qr` | QR Сбербанка | Оплачивает по QR-коду или платёжной ссылке Сбербанка; формат реквизитов как у `nspk` |
+        | `vtb_qr` | QR ВТБ | Оплачивает по QR-коду или платёжной ссылке ВТБ; формат реквизитов как у `nspk` |
         | `transgran` | Трансграничный перевод | Переводит на иностранные реквизиты по выданной инструкции |
+        | `sim_transgran` | Трансграничный перевод через SIM-карту | Переводит на SIM-карту или мобильный номер; валюта и инструкция как у `transgran` |
+        | `sim` | Мобильная коммерция | Оплачивает с баланса SIM-карты или мобильного номера |
 
-        Список может расширяться совместимо с v1. Не формируйте код метода из названия банка
-        и не разбирайте его как составную строку.
+        Не создавайте другие составные коды самостоятельно и не разбирайте значения
+        метода как произвольную составную строку.
 
         Код (slug) банка. Передаётся отдельно от `method`.
 
@@ -1360,7 +1369,7 @@ paths:
                 error:
                   code: 4001
                   reason: "METHOD_NOT_ALLOWED_VALUE"
-                  message: "method must be one of: sbp, nspk, transgran, c2c"
+                  message: "method must be one of: sbp, c2c, nspk, sber_qr, vtb_qr, transgran, sim_transgran, sim"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "409":
@@ -1485,7 +1494,7 @@ paths:
         | `order_id`, `transaction_id` | string | всегда | ваш ID и ID депозита в Сервисе |
         | `status` | string | всегда | исход: `PENDING` \| `SUCCESS` \| `FAILED` — единственное поле для денежной логики |
         | `stage` | string | всегда | этап жизненного цикла (`-ING` идёт, `-ED` кончился); словарь пополняется без смены версии |
-        | `method` | string | всегда | платёжный метод: `sbp` \| `nspk` \| `transgran` \| `c2c` |
+        | `method` | string | всегда | платёжный метод: `sbp` \| `c2c` \| `nspk` \| `sber_qr` \| `vtb_qr` \| `transgran` \| `sim_transgran` \| `sim` |
         | `amount` | number | всегда | заявленная вами сумма |
         | `currency` | string | всегда | `RUB` |
         | `bank` | string | если применимо | код банка выданного реквизита |
@@ -1814,20 +1823,25 @@ components:
   schemas:
     PaymentMethod:
       type: string
-      enum: [sbp, nspk, transgran, c2c]
+      enum: [sbp, c2c, nspk, sber_qr, vtb_qr, transgran, sim_transgran, sim]
       description: |
-        Платёжный метод определяет механику перевода. Банк в название метода не входит:
-        если он известен, передавайте его отдельно в поле `bank`.
+        Платёжный метод определяет механику перевода. Обычно банк передаётся отдельно
+        в поле `bank`; `sber_qr` и `vtb_qr` — утверждённые исключения, потому что
+        соответствующий банк определяет сам QR-контур.
 
         | Код | Название | Что делает клиент |
         |---|---|---|
         | `sbp` | СБП | Переводит по номеру телефона через Систему быстрых платежей |
         | `c2c` | Перевод на карту | Переводит по номеру банковской карты |
         | `nspk` | QR НСПК | Оплачивает по QR-коду или платёжной ссылке НСПК |
+        | `sber_qr` | QR Сбербанка | Оплачивает по QR-коду или платёжной ссылке Сбербанка; формат реквизитов как у `nspk` |
+        | `vtb_qr` | QR ВТБ | Оплачивает по QR-коду или платёжной ссылке ВТБ; формат реквизитов как у `nspk` |
         | `transgran` | Трансграничный перевод | Переводит на иностранные реквизиты по выданной инструкции |
+        | `sim_transgran` | Трансграничный перевод через SIM-карту | Переводит на SIM-карту или мобильный номер; валюта и инструкция как у `transgran` |
+        | `sim` | Мобильная коммерция | Оплачивает с баланса SIM-карты или мобильного номера |
 
-        Список может расширяться совместимо с v1. Не формируйте код метода из названия банка
-        и не разбирайте его как составную строку.
+        Не создавайте другие составные коды самостоятельно и не разбирайте значения
+        метода как произвольную составную строку.
       example: sbp
     BankCode:
       type: string
@@ -2141,18 +2155,22 @@ components:
         | `sbp` | `phone`, `bank`, `bank_name`, `recipient_name` | перевод по телефону; `bank` — информационный |
         | `c2c` | `card_number`, `bank`, `bank_name`, `recipient_name` | перевод по номеру карты |
         | `nspk` | `payment_url`, `qr_data`, `qr_image_url` | QR рендерите сами из `qr_data` или берите готовую картинку `qr_image_url` |
+        | `sber_qr` | `payment_url`, `qr_data`, `qr_image_url` | QR Сбербанка; формат реквизитов как у `nspk` |
+        | `vtb_qr` | `payment_url`, `qr_data`, `qr_image_url` | QR ВТБ; формат реквизитов как у `nspk` |
         | `transgran` | `card_number` или `phone`, `bank_name`, `payment_currency`, `instruction` | `instruction` присутствует всегда — покажите клиенту целиком |
+        | `sim_transgran` | `phone`, `bank_name`, `payment_currency`, `instruction` | трансграничный перевод на SIM-карту или мобильный номер; валюта и инструкция как у `transgran` |
+        | `sim` | `phone`, `instruction` | оплата с баланса SIM-карты или мобильного номера |
       properties:
-        phone: { type: string, description: "Телефон для перевода (`sbp`, `transgran`); в redirect-GET — маскирован", example: "+7926***6543" }
+        phone: { type: string, description: "Телефон для перевода (`sbp`, `transgran`, `sim_transgran`, `sim`); в redirect-GET — маскирован", example: "+7926***6543" }
         card_number: { type: string, description: "Номер карты (`c2c`, `transgran`); в redirect-GET — маскирован", example: "411111******1111" }
         bank: { type: string, description: Код банка реквизита }
         bank_name: { type: string, description: Название банка реквизита, example: "Т-Банк" }
         recipient_name: { type: string, description: Имя получателя перевода, example: "Пётр С." }
-        payment_url: { type: string, description: "Платёжная ссылка / QR НСПК (`nspk`)" }
-        qr_data: { type: string, description: "Данные QR-кода (`nspk`, необязательное)" }
-        payment_currency: { type: string, description: "Валюта оплаты по реквизиту (`transgran`)" }
-        instruction: { type: string, description: "Текстовая инструкция для клиента (`transgran`). В h2h для `transgran` присутствует всегда — показывайте целиком." }
-        qr_image_url: { type: string, format: uri, description: "Готовая картинка QR-кода (`nspk`), если рендер на вашей стороне не нужен" }
+        payment_url: { type: string, description: "Платёжная ссылка / QR (`nspk`, `sber_qr`, `vtb_qr`)" }
+        qr_data: { type: string, description: "Данные QR-кода (`nspk`, `sber_qr`, `vtb_qr`; необязательное)" }
+        payment_currency: { type: string, description: "Валюта оплаты по реквизиту (`transgran`, `sim_transgran`)" }
+        instruction: { type: string, description: "Текстовая инструкция для клиента (`transgran`, `sim_transgran`, `sim`). В h2h для `transgran` и `sim_transgran` присутствует всегда — показывайте целиком." }
+        qr_image_url: { type: string, format: uri, description: "Готовая картинка QR-кода (`nspk`, `sber_qr`, `vtb_qr`), если рендер на вашей стороне не нужен" }
     CallbackEvent:
       type: object
       description: |
