@@ -45,7 +45,7 @@ info:
        │◄──────────────────────┤                        │                      │
     ```
 
-    1. Создайте депозит `POST /v1/deposits`, указав вариант интеграции (`flow`), платёжный метод (`method`: `sbp` | `c2c` | `nspk` | `sber_qr` | `vtb_qr` | `transgran` | `sim_transgran` | `sim`) и при необходимости банк (`bank`).
+    1. Создайте депозит `POST /v1/deposits`, указав вариант интеграции (`flow`), платёжный метод (`method`: `sbp` | `c2c` | `nspk` | `sber_qr` | `vtb_qr` | `transgran` | `sim_transgran` | `sim`) и при необходимости банк (`bank`) и уровень клиента (`traffic_type`: `ftd` | `std`).
        Через какую платёжную систему пойдёт платёж — по умолчанию решает Сервис; при закреплённом за вами маршруте укажите её полем `psp`.
     2. Заберите артефакт вашего варианта из `GET /v1/deposits/{transaction_id}`: реквизиты (`requisites` + `pay_amount`, h2h) покажите клиенту, на форму для оплаты (`redirect_url`, redirect) — направьте его.
        Пока артефакта нет (`stage = ISSUING_REQUISITES`) — покажите клиенту ожидание и опрашивайте статус.
@@ -150,7 +150,7 @@ info:
 
     **Шаг 1 · Создать депозит (h2h) · `PENDING / ISSUING_REQUISITES`**
 
-    `POST /v1/deposits` — обязательные в теле: `"flow": "h2h"`, `method` (платёжный метод: `sbp` | `c2c` | `nspk` | `sber_qr` | `vtb_qr` | `transgran` | `sim_transgran` | `sim`), `amount`, `currency`, `order_id`, `callback_url`; необязательные: `bank` (банк, выбранный клиентом, — в нём при наличии выдадут реквизиты), `psp`, `customer_account_id`, `fields`. Разбор каждого поля — таблица «Поля запроса» в `POST /v1/deposits` ниже.
+    `POST /v1/deposits` — обязательные в теле: `"flow": "h2h"`, `method` (платёжный метод: `sbp` | `c2c` | `nspk` | `sber_qr` | `vtb_qr` | `transgran` | `sim_transgran` | `sim`), `amount`, `currency`, `order_id`, `callback_url`; необязательные: `bank` (банк, выбранный клиентом, — в нём при наличии выдадут реквизиты), `traffic_type` (`ftd` — первый, `std` — повторный депозит по классификации вашей системы), `psp`, `customer_account_id`, `fields`. Разбор каждого поля — таблица «Поля запроса» в `POST /v1/deposits` ниже.
 
     ```
     200 OK
@@ -597,7 +597,7 @@ info:
 
     **Шаг 1 · Создать депозит (redirect) · `PENDING / ISSUING_REQUISITES`**
 
-    `POST /v1/deposits` — обязательные в теле: `"flow": "redirect"`, `method` (платёжный метод: `sbp` | `c2c` | `nspk` | `sber_qr` | `vtb_qr` | `transgran` | `sim_transgran` | `sim`), `amount`, `currency`, `order_id`, `callback_url`, `success_url`, `pending_url`, `fail_url`; необязательные: `bank` (банк, выбранный клиентом, — в нём при наличии выдадут реквизиты), `psp`, `customer_account_id`, `fields`. Разбор каждого поля — таблица «Поля запроса» в `POST /v1/deposits` ниже.
+    `POST /v1/deposits` — обязательные в теле: `"flow": "redirect"`, `method` (платёжный метод: `sbp` | `c2c` | `nspk` | `sber_qr` | `vtb_qr` | `transgran` | `sim_transgran` | `sim`), `amount`, `currency`, `order_id`, `callback_url`, `success_url`, `pending_url`, `fail_url`; необязательные: `bank` (банк, выбранный клиентом, — в нём при наличии выдадут реквизиты), `traffic_type` (`ftd` — первый, `std` — повторный депозит по классификации вашей системы), `psp`, `customer_account_id`, `fields`. Разбор каждого поля — таблица «Поля запроса» в `POST /v1/deposits` ниже.
 
     ```
     200 OK
@@ -936,7 +936,7 @@ info:
 
     ```sh
     # POST — подписывайте и отправляйте одну и ту же переменную
-    BODY='{"order_id":"ORDER-1001","amount":1500.00,"currency":"RUB","method":"sbp","flow":"h2h","bank":"tbank","callback_url":"https://merchant.example/payments/callback"}'
+    BODY='{"order_id":"ORDER-1001","amount":1500.00,"currency":"RUB","method":"sbp","flow":"h2h","bank":"tbank","traffic_type":"ftd","callback_url":"https://merchant.example/payments/callback"}'
     SIGNATURE=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET_KEY" -hex | sed 's/^.* //')
 
     curl -s -X POST https://api.example/v1/deposits \
@@ -1248,7 +1248,7 @@ paths:
         Обязательные заголовки: `x-api-key`, `x-signature` (HMAC-SHA256 от сырого тела),
         `content-type: application/json`. Необязательный `x-request-id` — для сквозной трассировки.
 
-        Маршрут по умолчанию выбирает Сервис по `method`, `bank` и вашим настройкам подключения.
+        Маршрут по умолчанию выбирает Сервис по `method`, `bank`, `traffic_type` и вашим настройкам подключения.
         Если за вами закреплена конкретная платёжная система — передайте её slug необязательным
         полем `psp` в теле запроса (`"psp": "psp-slug"`; значения выдаются при подключении).
         Неизвестный или отключённый slug — `422 PSP_NOT_FOUND` / `PSP_DISABLED`.
@@ -1268,10 +1268,11 @@ paths:
         | `fail_url` | string (uri) | да (redirect) / — (h2h) | возврат клиента при неуспехе |
         | `psp` | string | нет | slug платёжной системы при закреплённом за вами маршруте; без него маршрут выбирает Сервис. Неверный slug — `422 PSP_NOT_FOUND` / `PSP_DISABLED`. Кто фактически выдал реквизиты — поле `psp` в GET-статусе, оно появляется после выдачи |
         | `bank` | string | нет | банк клиента — тот, который клиент выбрал у вас при оплате (`sber`, `tbank`, `alfa`, …): Сервис выдаст реквизиты в этом банке при наличии; не передан — банк выбирает Сервис |
+        | `traffic_type` | string | нет | уровень клиента в вашей системе: `ftd` — первый депозит, `std` — повторный; Сервис принимает значение как есть и использует при маршрутизации. Не передан — маршрут строится без фильтра по типу трафика |
         | `customer_account_id` | integer | нет | числовой ID клиента в вашей системе |
         | `fields` | object | нет | данные плательщика: `first_name`, `last_name`, `middle_name`, `email`, `phone` — все необязательны |
 
-        ### Справочники `method` и `bank`
+        ### Справочники `method`, `bank` и `traffic_type`
 
         Платёжный метод определяет механику перевода. Обычно банк передаётся отдельно
         в поле `bank`; `sber_qr` и `vtb_qr` — утверждённые исключения, потому что
@@ -1318,6 +1319,17 @@ paths:
 
         Не каждый банк обязан поддерживать каждый метод. Несовместимая комбинация —
         `400 BANK_NOT_SUPPORTED_FOR_METHOD`. Если `bank` не передан, банк выбирает Сервис.
+
+        `traffic_type` — уровень клиента в вашей системе на момент создания депозита:
+
+        | Код | Значение |
+        |---|---|
+        | `ftd` | Первый депозит по классификации вашей системы |
+        | `std` | Повторный депозит по классификации вашей системы |
+
+        Поле необязательное. Классификацию определяете и передаёте вы; Сервис принимает
+        её как есть, не вычисляет по собственной истории и использует при маршрутизации.
+        Если поле отсутствует, маршрут строится без фильтра по типу трафика.
       requestBody:
         required: true
         content:
@@ -1332,6 +1344,7 @@ paths:
               flow: "redirect"
               psp: "psp-slug"
               bank: "tbank"
+              traffic_type: "ftd"
               customer_account_id: 778234
               callback_url: "https://merchant.example/payments/callback"
               success_url: "https://merchant.example/payments/success"
@@ -1386,7 +1399,7 @@ paths:
         "422":
           description: |
             Заявка не создана, `transaction_id` не выдан:
-            - `METHOD_TEMPORARILY_UNAVAILABLE` — под запрошенные `method` и `bank` сейчас нет живого маршрута; повторите позже;
+            - `METHOD_TEMPORARILY_UNAVAILABLE` — под запрошенные `method`, `bank` и `traffic_type` сейчас нет живого маршрута; повторите позже;
             - `AMOUNT_OUT_OF_RANGE` — сумма вне допустимого диапазона;
             - `PSP_NOT_FOUND`, `PSP_DISABLED` — только если вы передали поле `psp`: slug не найден либо система отключена.
             - `FLOW_NOT_ALLOWED` — запрошенный `flow` недоступен вашему подключению;
@@ -1403,7 +1416,7 @@ paths:
                 error:
                   code: 4220
                   reason: "METHOD_TEMPORARILY_UNAVAILABLE"
-                  message: "no available route for the requested method and bank, retry later"
+                  message: "no available route for the requested method, bank and traffic type, retry later"
         "413":
           description: |
             Тело запроса больше допустимого (1 МиБ). Проверяется до разбора и до проверки подписи,
@@ -1843,6 +1856,22 @@ components:
         Не создавайте другие составные коды самостоятельно и не разбирайте значения
         метода как произвольную составную строку.
       example: sbp
+    TrafficType:
+      type: string
+      enum: [ftd, std]
+      description: |
+        Уровень пользователя в системе клиента на момент создания депозита:
+
+        | Код | Значение |
+        |---|---|
+        | `ftd` | Первый депозит по классификации клиента |
+        | `std` | Повторный депозит по классификации клиента |
+
+        Классификацию определяет клиент и передаёт Сервису как есть. Сервис не вычисляет
+        её по собственной истории и использует значение при маршрутизации. Поле
+        `traffic_type` в запросе создания депозита необязательное: если оно отсутствует,
+        маршрут строится без фильтра по типу трафика.
+      example: ftd
     BankCode:
       type: string
       enum:
@@ -1918,6 +1947,12 @@ components:
           description: Валюта, ISO 4217. В текущей версии — только `RUB`.
         method:
           $ref: "#/components/schemas/PaymentMethod"
+        traffic_type:
+          allOf: [{ $ref: "#/components/schemas/TrafficType" }]
+          description: |
+            Необязательный уровень пользователя в вашей системе. Передавайте `ftd` для
+            первого и `std` для повторного депозита по вашей классификации. Сервис принимает
+            значение как есть. Если поле отсутствует, тип трафика при маршрутизации не учитывается.
         flow:
           type: string
           enum: [redirect, h2h]
@@ -1931,8 +1966,8 @@ components:
           type: string
           description: |
             Платёжная система, через которую пойдёт платёж, — slug из настроек подключения.
-            Поле необязательное: без него маршрут выбирает Сервис по `method`, `bank`
-            и вашим настройкам подключения; с ним платёж идёт через указанную систему
+            Поле необязательное: без него маршрут выбирает Сервис по `method`, `bank`,
+            `traffic_type` и вашим настройкам подключения; с ним платёж идёт через указанную систему
             (`422 PSP_NOT_FOUND` / `PSP_DISABLED`, если slug неизвестен или система отключена).
             Значения выдаются при подключении.
 
