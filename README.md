@@ -21,6 +21,7 @@
 | `api-reference/conventions.mdx` | версионирование, трассировка, что сообщать в поддержку |
 | `api-reference/sandbox-reference.mdx` | полная механика мока: `x-mock-response-name`/`-code`, curl, колбэки в песочнице |
 | `api-reference/openapi.yaml` | **сгенерированная копия**, не редактировать |
+| `api-reference/dictionaries.mdx` | справочники платёжных методов и банков; правило раздельной передачи `method` и `bank` |
 
 ## Правила письма
 
