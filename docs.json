@@ -70,6 +70,7 @@
           {
             "group": "Протокол",
             "pages": [
+              "api-reference/dictionaries",
               "api-reference/authentication",
               "api-reference/conventions"
             ]

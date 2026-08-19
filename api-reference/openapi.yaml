@@ -1143,6 +1143,8 @@ info:
 
     Лимиты запросов и сумм согласуются при подключении. `429 RATE_LIMIT_EXCEEDED` приходит с заголовком
     `Retry-After`; сумма вне диапазона → `422 AMOUNT_OUT_OF_RANGE` (границы в ответе не сообщаются).
+    Тело запроса ограничено 1 МиБ: всё, что больше, отбивается `413 VALIDATION_ERROR` ещё до
+    проверки подписи. Контрактные тела на порядки меньше — в лимит упирается только явно битый запрос.
 
     ## Ошибки запроса
 
@@ -1162,13 +1164,19 @@ info:
     |---|---|---|---|
     | 400 | `VALIDATION_ERROR`, `METHOD_NOT_ALLOWED_VALUE`, `BANK_UNKNOWN`, `BANK_NOT_SUPPORTED_FOR_METHOD`, `CURRENCY_NOT_SUPPORTED` | создание | исправить запрос; повтор без изменений бесполезен |
     | 401 | `INVALID_SIGNATURE`, `UNKNOWN_API_KEY` | все | проверить ключ и расчёт подписи |
-    | 404 | `TRANSACTION_NOT_FOUND` | статус, отмена | проверить `transaction_id`; чужие заявки не видны |
+    | 404 | `TRANSACTION_NOT_FOUND` | статус, отмена | путь верен, заявки нет — проверить `transaction_id`; чужие заявки не видны |
+    | 404 | `VALIDATION_ERROR` | все | такого пути в API нет — сверьте путь с описанием ручки; к заявке отношения не имеет |
+    | 405 | `VALIDATION_ERROR` | все | путь есть, метод другой — сверьте HTTP-метод ручки; повтор без изменений бесполезен |
     | 409 | `DUPLICATE_ORDER_ID` | создание | `order_id` уже использован с другим телом — новая попытка оплаты требует нового `order_id` |
     | 409 | `ALREADY_FINALIZED`, `CANCEL_NOT_AVAILABLE` | отмена | заявка уже в исходе — смотрите GET / текущий этап не допускает отмену |
-    | 422 | `METHOD_TEMPORARILY_UNAVAILABLE`, `AMOUNT_OUT_OF_RANGE`, `PSP_NOT_FOUND`, `PSP_DISABLED`, `FLOW_NOT_ALLOWED` | создание | заявка не создана: маршрут — повторить позже, сумма — исправить; вариант интеграции недоступен вашему подключению — согласуйте его включение с поддержкой |
+    | 422 | `METHOD_TEMPORARILY_UNAVAILABLE`, `AMOUNT_OUT_OF_RANGE`, `PSP_NOT_FOUND`, `PSP_DISABLED`, `FLOW_NOT_ALLOWED`, `CALLBACK_URL_FORBIDDEN` | создание | заявка не создана: маршрут — повторить позже, сумма — исправить; вариант интеграции недоступен вашему подключению — согласуйте его включение с поддержкой |
+    | 413 | `VALIDATION_ERROR` | все | тело запроса больше допустимого — уменьшите его; повтор без изменений бесполезен |
     | 429 | `RATE_LIMIT_EXCEEDED` | все | повторить не раньше `Retry-After` |
     | 500 | `INTERNAL_ERROR` | все | повторить с тем же `order_id` |
     | 502 | `SERVICE_TEMPORARILY_UNAVAILABLE` | создание | состояние не определено: повторить с тем же `order_id` и тем же телом |
+
+    Один HTTP-код может нести разные `reason`: `404` приходит и на несуществующую заявку,
+    и на несуществующий путь — различает их только `reason`.
 
     Неуспех самой заявки ошибкой запроса **не является**: он описывается парой `status` + `stage`,
     а блок `error` в статусе заявки несёт только человекочитаемое `message` и разбору не подлежит.
@@ -1329,7 +1337,9 @@ paths:
             - `METHOD_TEMPORARILY_UNAVAILABLE` — под запрошенные `method` и `bank` сейчас нет живого маршрута; повторите позже;
             - `AMOUNT_OUT_OF_RANGE` — сумма вне допустимого диапазона;
             - `PSP_NOT_FOUND`, `PSP_DISABLED` — только если вы передали поле `psp`: slug не найден либо система отключена.
-            - `FLOW_NOT_ALLOWED` — запрошенный `flow` недоступен вашему подключению.
+            - `FLOW_NOT_ALLOWED` — запрошенный `flow` недоступен вашему подключению;
+            - `CALLBACK_URL_FORBIDDEN` — `callback_url` не годится как приёмник: не `https`, не публичный
+              адрес либо содержит учётные данные. Исправьте адрес — повтор без изменений бесполезен.
 
             Отличайте от `stage = UNROUTED`: там заявка **создана**, `transaction_id` выдан,
             но ни одна платёжная система не выдала реквизиты — исход `FAILED`, о нём приходит колбэк.
@@ -1342,6 +1352,19 @@ paths:
                   code: 4220
                   reason: "METHOD_TEMPORARILY_UNAVAILABLE"
                   message: "no available route for the requested method and bank, retry later"
+        "413":
+          description: |
+            Тело запроса больше допустимого (1 МиБ). Проверяется до разбора и до проверки подписи,
+            поэтому приходит даже при неверном `x-signature`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: 4000
+                  reason: "VALIDATION_ERROR"
+                  message: "request body too large"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":
@@ -1586,6 +1609,19 @@ paths:
                   code: 4040
                   reason: "TRANSACTION_NOT_FOUND"
                   message: "transaction not found"
+        "413":
+          description: |
+            Тело запроса больше допустимого (1 МиБ). Проверяется до разбора и до проверки подписи,
+            поэтому приходит даже при неверном `x-signature`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: 4000
+                  reason: "VALIDATION_ERROR"
+                  message: "request body too large"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":
@@ -1660,6 +1696,19 @@ paths:
                   code: 4091
                   reason: "ALREADY_FINALIZED"
                   message: "deposit already finalized, check current state via GET"
+        "413":
+          description: |
+            Тело запроса больше допустимого (1 МиБ). Проверяется до разбора и до проверки подписи,
+            поэтому приходит даже при неверном `x-signature`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: 4000
+                  reason: "VALIDATION_ERROR"
+                  message: "request body too large"
         "429":
           $ref: "#/components/responses/RateLimited"
         "500":
@@ -1724,15 +1773,70 @@ components:
       type: string
       enum: [sbp, nspk, transgran, c2c]
       description: |
-        Платёжный метод:
-        - `sbp` — СБП, перевод по номеру телефона
-        - `nspk` — НСПК, оплата по QR-коду / платёжной ссылке
-        - `transgran` — трансграничный перевод по выданным реквизитам с инструкцией
-        - `c2c` — перевод по номеру карты
+        Платёжный метод определяет механику перевода. Банк в название метода не входит:
+        если он известен, передавайте его отдельно в поле `bank`.
+
+        | Код | Название | Что делает клиент |
+        |---|---|---|
+        | `sbp` | СБП | Переводит по номеру телефона через Систему быстрых платежей |
+        | `c2c` | Перевод на карту | Переводит по номеру банковской карты |
+        | `nspk` | QR НСПК | Оплачивает по QR-коду или платёжной ссылке НСПК |
+        | `transgran` | Трансграничный перевод | Переводит на иностранные реквизиты по выданной инструкции |
+
+        Список может расширяться совместимо с v1. Не формируйте код метода из названия банка
+        и не разбирайте его как составную строку.
       example: sbp
     BankCode:
       type: string
-      description: "Код (slug) банка из справочника: `sber` — Сбербанк, `tbank` — Т-Банк, `alfa` — Альфа-Банк. Актуальный перечень сообщается при подключении."
+      enum:
+        - sber
+        - tbank
+        - alfa
+        - vtb
+        - ozon
+        - raiffeisen
+        - psb
+        - gazprombank
+        - yandex
+        - yoomoney
+        - mts
+        - sovcombank
+        - rosselkhozbank
+        - pochtabank
+        - otp
+        - akbars
+        - uralsib
+        - bspb
+        - ubrir
+        - mkb
+      description: |
+        Код (slug) банка. Передаётся отдельно от `method`.
+
+        | Код | Банк |
+        |---|---|
+        | `sber` | Сбербанк |
+        | `tbank` | Т-Банк |
+        | `alfa` | Альфа-Банк |
+        | `vtb` | ВТБ |
+        | `ozon` | Ozon Банк |
+        | `raiffeisen` | Райффайзенбанк |
+        | `psb` | Промсвязьбанк |
+        | `gazprombank` | Газпромбанк |
+        | `yandex` | Яндекс Банк |
+        | `yoomoney` | ЮMoney |
+        | `mts` | МТС Банк |
+        | `sovcombank` | Совкомбанк |
+        | `rosselkhozbank` | Россельхозбанк |
+        | `pochtabank` | Почта Банк |
+        | `otp` | ОТП Банк |
+        | `akbars` | Ак Барс Банк |
+        | `uralsib` | Банк Уралсиб |
+        | `bspb` | Банк Санкт-Петербург |
+        | `ubrir` | УБРиР |
+        | `mkb` | Московский кредитный банк |
+
+        Не каждый банк обязан поддерживать каждый метод. Несовместимая комбинация —
+        `400 BANK_NOT_SUPPORTED_FOR_METHOD`. Если `bank` не передан, банк выбирает Сервис.
       example: tbank
     DepositCreateRequest:
       type: object
@@ -1839,20 +1943,27 @@ components:
           description: Эхо вашего ID.
         status:
           type: string
-          enum: [PENDING]
-          description: На создании всегда `PENDING`.
+          enum: [PENDING, SUCCESS, FAILED]
+          description: |
+            На ПЕРВОМ создании всегда `PENDING`. Идемпотентный повтор возвращает заявку в её
+            ТЕКУЩЕМ состоянии (см. «Идемпотентность»): если за это время подбор успел закончиться,
+            в ответе приедет уже исход — например `FAILED` со `stage = UNROUTED`. Поэтому множество
+            значений здесь то же, что у статуса заявки.
         stage:
           type: string
-          enum: [ISSUING_REQUISITES]
           description: |
-            На создании — `ISSUING_REQUISITES`: платёжная система готовит артефакт
+            На ПЕРВОМ создании — `ISSUING_REQUISITES`: платёжная система готовит артефакт
             вашего варианта интеграции (`redirect_url` или `requisites`) —
-            он появится в `GET /v1/deposits/{transaction_id}`.
+            он появится в `GET /v1/deposits/{transaction_id}`. Идемпотентный повтор вернёт
+            тот этап, на котором заявка находится сейчас, — словарь тот же, что у статуса заявки
+            (см. «Заявка: статус и этап»).
+          example: ISSUING_REQUISITES
         amount:
           type: number
           description: Заявленная вами сумма.
         currency:
           type: string
+          enum: [RUB]
           description: "`RUB`"
         expires_at:
           type: string
@@ -1914,7 +2025,7 @@ components:
                 Зачисляйте её. Сравнивайте с суммой к оплате (`pay_amount`, а при его отсутствии —
                 `amount`): расхождение означает недоплату или переплату, отдельных статусов
                 и этапов для этого нет.
-            currency: { type: string, description: "`RUB`" }
+            currency: { type: string, enum: [RUB], description: "`RUB`" }
             account_number:
               type: string
               description: Реквизит плательщика в маскированном виде (карта — `411111******1111`).
@@ -2027,16 +2138,46 @@ components:
       properties:
         code:
           type: integer
-          description: Числовой код. Для причин неуспеха депозита не фиксируется — опорой служить не должен.
+          description: |
+            Числовой код ошибки запроса. Ветвиться по нему НЕ нужно — для логики есть `reason`;
+            код существует для логов и обращений в поддержку. Соответствие фиксировано, одно
+            число — один `reason`:
+
+            | `reason` | `code` | HTTP |
+            |---|---|---|
+            | `VALIDATION_ERROR` | 4000 | 400, 404, 405, 413 |
+            | `METHOD_NOT_ALLOWED_VALUE` | 4001 | 400 |
+            | `BANK_UNKNOWN` | 4002 | 400 |
+            | `BANK_NOT_SUPPORTED_FOR_METHOD` | 4003 | 400 |
+            | `CURRENCY_NOT_SUPPORTED` | 4004 | 400 |
+            | `INVALID_SIGNATURE` | 4010 | 401 |
+            | `UNKNOWN_API_KEY` | 4011 | 401 |
+            | `TRANSACTION_NOT_FOUND` | 4040 | 404 |
+            | `DUPLICATE_ORDER_ID` | 4090 | 409 |
+            | `ALREADY_FINALIZED` | 4091 | 409 |
+            | `CANCEL_NOT_AVAILABLE` | 4092 | 409 |
+            | `METHOD_TEMPORARILY_UNAVAILABLE` | 4220 | 422 |
+            | `PSP_NOT_FOUND` | 4221 | 422 |
+            | `PSP_DISABLED` | 4222 | 422 |
+            | `AMOUNT_OUT_OF_RANGE` | 4223 | 422 |
+            | `FLOW_NOT_ALLOWED` | 4224 | 422 |
+            | `CALLBACK_URL_FORBIDDEN` | 4225 | 422 |
+            | `RATE_LIMIT_EXCEEDED` | 4290 | 429 |
+            | `INTERNAL_ERROR` | 5000 | 500 |
+            | `SERVICE_TEMPORARILY_UNAVAILABLE` | 5020 | 502 |
+
+            Для причин неуспеха самой заявки числовой код не фиксируется вовсе — там работает
+            пара `status` + `stage`.
         reason:
           type: string
           description: |
             Машиночитаемый код — используйте его в логике обработки. Основные значения:
-            `VALIDATION_ERROR` (400), `METHOD_NOT_ALLOWED_VALUE` (400), `BANK_UNKNOWN` (400),
+            `VALIDATION_ERROR` (400, 404, 405, 413), `METHOD_NOT_ALLOWED_VALUE` (400), `BANK_UNKNOWN` (400),
             `BANK_NOT_SUPPORTED_FOR_METHOD` (400), `CURRENCY_NOT_SUPPORTED` (400),
             `INVALID_SIGNATURE` (401), `UNKNOWN_API_KEY` (401), `TRANSACTION_NOT_FOUND` (404),
             `DUPLICATE_ORDER_ID` (409), `ALREADY_FINALIZED` (409), `CANCEL_NOT_AVAILABLE` (409), `METHOD_TEMPORARILY_UNAVAILABLE` (422), `PSP_NOT_FOUND` (422),
-            `PSP_DISABLED` (422), `AMOUNT_OUT_OF_RANGE` (422), `FLOW_NOT_ALLOWED` (422), `RATE_LIMIT_EXCEEDED` (429),
+            `PSP_DISABLED` (422), `AMOUNT_OUT_OF_RANGE` (422), `FLOW_NOT_ALLOWED` (422),
+            `CALLBACK_URL_FORBIDDEN` (422), `RATE_LIMIT_EXCEEDED` (429),
             `INTERNAL_ERROR` (500), `SERVICE_TEMPORARILY_UNAVAILABLE` (502).
 
             Это коды **ошибок запроса**. Неуспех самой заявки описывается парой `status` + `stage`
